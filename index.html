@@ -1,0 +1,731 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Premium Rose Finance Dashboard</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            'brand-dark': '#33272a',
+            'brand-primary': '#db2777',
+            'brand-accent': '#059669',
+            'brand-soft': '#fff1f2',
+          },
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            heading: ['Outfit', 'sans-serif'],
+          },
+          borderRadius: { '4xl': '2rem' }
+        }
+      }
+    }
+  </script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body { background-color: #fffafb; color: #33272a; }
+    .card-zoom { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); cursor: pointer; border: 1px solid #ffe4e6; }
+    .card-zoom:hover { transform: translateY(-4px); box-shadow: 0 20px 25px -5px rgba(219, 39, 119, 0.1); border-color: #fbcfe8; }
+    .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #f9a8d4; border-radius: 10px; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    .animate-fade-in { animation: fadeIn 0.4s ease-out forwards; }
+    input:focus, select:focus { outline: none; box-shadow: 0 0 0 2px rgba(219, 39, 119, 0.2); }
+  </style>
+</head>
+<body class="antialiased min-h-screen p-4 md:p-8">
+
+  <div class="max-w-7xl mx-auto">
+    <header class="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-10 gap-6">
+      <div>
+        <h1 class="text-4xl font-heading font-extrabold tracking-tight text-brand-dark flex items-center gap-3">
+          <span class="p-3 bg-brand-primary/10 rounded-2xl"><i class="fas fa-wallet text-brand-primary"></i></span>
+          Keuangan <span class="text-brand-primary">Pribadi</span>
+        </h1>
+      </div>
+      
+      <div class="flex flex-wrap items-center gap-3 bg-white p-2 rounded-3xl shadow-sm border border-rose-100">
+        <select id="bulan" class="bg-transparent font-semibold px-4 py-2 focus:outline-none cursor-pointer text-slate-700"></select>
+        <select id="tahun" class="bg-transparent font-semibold px-4 py-2 focus:outline-none cursor-pointer text-slate-700 border-l border-rose-100"></select>
+        <button id="downloadLaporanBulanan" class="bg-brand-dark hover:bg-black text-white px-6 py-2.5 rounded-2xl shadow-lg transition-all flex items-center gap-2 font-medium text-sm">
+          <i class="fas fa-file-pdf"></i> Unduh Laporan
+        </button>
+      </div>
+    </header>
+
+    <div class="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-8">
+      <div class="lg:col-span-1 bg-brand-dark rounded-4xl p-8 text-white relative overflow-hidden shadow-2xl animate-fade-in group">
+        <div class="relative z-10">
+          <div class="flex items-center justify-between mb-8">
+            <div class="flex flex-col">
+              <span class="text-rose-200/60 font-medium tracking-wide text-[10px] uppercase">Kekayaan Bersih</span>
+              <div class="flex items-center gap-1.5 mt-1">
+                <span class="w-1.5 h-1.5 bg-brand-primary rounded-full animate-pulse"></span>
+                <span class="text-[9px] text-rose-200/50 font-medium tracking-wider uppercase">Secure Dashboard</span>
+              </div>
+            </div>
+            <button class="toggle-visibility-btn w-10 h-10 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 transition-all">
+              <i id="eyeIcon" class="fas fa-eye-slash text-xs"></i>
+            </button>
+          </div>
+          <p id="displayTotalKekayaan" class="text-3xl font-heading font-bold mb-4 tracking-tight">Rp 0</p>
+        </div>
+        <div class="absolute -right-10 -bottom-10 w-40 h-40 bg-brand-primary/20 rounded-full blur-3xl group-hover:bg-brand-primary/30 transition-all"></div>
+      </div>
+
+      <div id="rekeningList" class="lg:col-span-3 grid grid-cols-1 sm:grid-cols-3 gap-4 animate-fade-in" style="animation-delay: 0.1s"></div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
+      <div class="lg:col-span-2 bg-white rounded-4xl p-8 shadow-sm border border-rose-100 animate-fade-in" style="animation-delay: 0.2s">
+        <h2 class="text-xl font-heading font-bold text-brand-dark mb-6 flex items-center gap-2">
+          <i class="fas fa-chart-area text-brand-primary"></i> Trend Saldo
+        </h2>
+        <div class="h-[300px] w-full">
+          <canvas id="balanceChart"></canvas>
+        </div>
+      </div>
+
+      <div class="bg-white rounded-4xl p-8 shadow-sm border border-rose-100 flex flex-col animate-fade-in" style="animation-delay: 0.3s">
+        <div class="flex items-center justify-between mb-6">
+          <h2 class="text-lg font-heading font-bold text-brand-dark">Kategori Khusus</h2>
+          <button id="aturKategoriBtn" class="text-brand-primary text-sm font-bold hover:underline">Atur</button>
+        </div>
+        <div id="ringkasanKategoriKustom" class="space-y-4 custom-scrollbar overflow-y-auto flex-grow"></div>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
+      <div class="bg-white rounded-4xl p-8 shadow-sm border border-rose-100 animate-fade-in" style="animation-delay: 0.4s">
+        <div class="flex items-center justify-between mb-6">
+          <h2 class="text-lg font-heading font-bold text-brand-dark">Anggaran</h2>
+          <button id="aturAnggaranBtn" class="text-brand-primary text-sm font-bold hover:underline">Kelola</button>
+        </div>
+        <div id="anggaranSummary" class="space-y-6"></div>
+      </div>
+
+      <div class="lg:col-span-2 bg-white rounded-4xl p-8 shadow-sm border border-rose-100 animate-fade-in" style="animation-delay: 0.5s">
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
+          <h2 class="text-xl font-heading font-bold text-brand-dark">Transaksi Terbaru</h2>
+          <button id="addTransactionBtn" class="bg-brand-primary text-white px-5 py-2 rounded-xl font-bold text-sm shadow-lg shadow-brand-primary/20 hover:scale-105 transition-all">
+            <i class="fas fa-plus mr-2"></i> Tambah Transaksi
+          </button>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 mb-6">
+          <input type="text" id="searchNama" placeholder="Cari..." class="bg-brand-soft border-none rounded-xl px-4 py-2 text-sm">
+          <select id="filterKategori" class="bg-brand-soft border-none rounded-xl px-4 py-2 text-sm"></select>
+          <input type="date" id="startDate" class="bg-brand-soft border-none rounded-xl px-4 py-2 text-sm">
+          <input type="date" id="endDate" class="bg-brand-soft border-none rounded-xl px-4 py-2 text-sm">
+          <select id="jumlahTransaksi" class="bg-brand-soft border-none rounded-xl px-4 py-2 text-sm">
+            <option value="5">5</option>
+            <option value="10" selected>10</option>
+            <option value="20">20</option>
+          </select>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-left" id="tabelTransaksi">
+            <thead>
+              <tr class="text-rose-300 text-xs font-bold uppercase tracking-widest border-b border-rose-50">
+                <th class="px-2 py-4">Tanggal</th>
+                <th class="px-2 py-4">Detail</th>
+                <th class="px-2 py-4">Kategori</th>
+                <th class="px-2 py-4 text-right">Nominal</th>
+              </tr>
+            </thead>
+            <tbody id="transaksiTerakhir" class="text-sm font-medium divide-y divide-rose-50"></tbody>
+          </table>
+          <p id="noTransactionsMessage" class="py-10 text-center text-rose-300 hidden italic">Belum ada data.</p>
+        </div>
+
+        <div class="flex gap-2 mt-6">
+          <button id="downloadExcel" class="flex-1 py-2 bg-emerald-50 text-emerald-600 rounded-xl text-xs font-bold hover:bg-emerald-100 transition-all">Excel</button>
+          <button id="downloadPDF" class="flex-1 py-2 bg-rose-50 text-brand-primary rounded-xl text-xs font-bold hover:bg-rose-100 transition-all">PDF</button>
+        </div>
+      </div>
+    </div>
+
+    <footer class="flex flex-wrap justify-between items-center bg-white p-6 rounded-4xl shadow-sm border border-rose-100 gap-4 mb-8">
+      <div class="flex gap-6">
+        <button id="exportBackup" class="text-brand-dark/50 font-bold text-sm hover:text-brand-primary"><i class="fas fa-download mr-2"></i> Export</button>
+        <label class="cursor-pointer text-brand-dark/50 font-bold text-sm hover:text-brand-primary">
+          <i class="fas fa-upload mr-2"></i> Import
+          <input type="file" id="importBackup" class="hidden" accept=".json">
+        </label>
+      </div>
+      <button id="resetData" class="text-rose-300 font-bold text-sm hover:text-red-600"><i class="fas fa-undo-alt mr-2"></i> Reset Data</button>
+    </footer>
+  </div>
+
+  <div id="modalBackdrop" class="fixed inset-0 bg-brand-dark/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div id="modalAturKategori" class="bg-white rounded-4xl p-8 w-full max-w-md shadow-2xl hidden">
+      <h3 class="text-2xl font-heading font-bold mb-6 text-brand-dark">Kategori Kustom</h3>
+      <div id="kategoriInputContainer" class="max-h-80 overflow-y-auto pr-2 custom-scrollbar"></div>
+      <button id="tambahKategoriBtn" class="w-full py-3 border-2 border-dashed border-rose-200 rounded-2xl mt-4 text-brand-primary font-bold hover:bg-rose-50">+ Tambah Baris</button>
+      <div class="flex gap-3 mt-8">
+        <button id="tutupModalBtn" class="flex-1 py-3 font-bold text-slate-400">Batal</button>
+        <button id="simpanKategoriBtn" class="flex-1 py-3 bg-brand-primary text-white rounded-2xl font-bold shadow-lg">Simpan</button>
+      </div>
+    </div>
+
+    <div id="modalAturAnggaran" class="bg-white rounded-4xl p-8 w-full max-w-md shadow-2xl hidden">
+      <h3 class="text-2xl font-heading font-bold mb-6 text-brand-dark">Target Anggaran</h3>
+      <div id="anggaranInputContainer" class="max-h-80 overflow-y-auto pr-2 custom-scrollbar"></div>
+      <button id="tambahAnggaranInputBtn" class="w-full py-3 border-2 border-dashed border-rose-200 rounded-2xl mt-4 text-brand-primary font-bold hover:bg-rose-50">+ Tambah Anggaran</button>
+      <div class="flex gap-3 mt-8">
+        <button id="tutupModalAnggaranBtn" class="flex-1 py-3 font-bold text-slate-400">Batal</button>
+        <button id="simpanAnggaranBtn" class="flex-1 py-3 bg-brand-primary text-white rounded-2xl font-bold shadow-lg">Simpan</button>
+      </div>
+    </div>
+
+    <div id="modalAddTransaction" class="bg-white rounded-4xl p-8 w-full max-w-md shadow-2xl hidden">
+      <h3 class="text-2xl font-heading font-bold mb-6 text-brand-dark">Tambah Transaksi</h3>
+      <form id="transactionForm" class="space-y-4">
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="text-[10px] font-bold text-rose-300 uppercase ml-2">Tanggal</label>
+            <input type="date" id="transactionDate" class="w-full bg-brand-soft border-none rounded-2xl p-3 text-sm" required>
+          </div>
+          <div>
+            <label class="text-[10px] font-bold text-rose-300 uppercase ml-2">Jenis</label>
+            <select id="transactionType" class="w-full bg-brand-soft border-none rounded-2xl p-3 text-sm" required>
+              <option value="pemasukan">Pemasukan</option>
+              <option value="pengeluaran">Pengeluaran</option>
+              <option value="transfer">Transfer</option>
+            </select>
+          </div>
+        </div>
+        <div id="rekeningFromGroup">
+          <label class="text-[10px] font-bold text-rose-300 uppercase ml-2">Rekening</label>
+          <select id="rekeningFrom" class="w-full bg-brand-soft border-none rounded-2xl p-3 text-sm" required></select>
+        </div>
+        <div id="rekeningToGroup" class="hidden">
+          <label class="text-[10px] font-bold text-rose-300 uppercase ml-2">Ke Rekening</label>
+          <select id="rekeningTo" class="w-full bg-brand-soft border-none rounded-2xl p-3 text-sm"></select>
+        </div>
+        <div>
+          <label class="text-[10px] font-bold text-rose-300 uppercase ml-2">Keterangan Item</label>
+          <input type="text" id="transactionAccount" class="w-full bg-brand-soft border-none rounded-2xl p-3 text-sm" placeholder="Contoh: Gaji Bulanan" required>
+        </div>
+        <div id="categoryGroup">
+          <label class="text-[10px] font-bold text-rose-300 uppercase ml-2">Kategori</label>
+          <select id="transactionCategory" class="w-full bg-brand-soft border-none rounded-2xl p-3 text-sm"></select>
+        </div>
+        <div>
+          <label class="text-[10px] font-bold text-rose-300 uppercase ml-2">Nominal</label>
+          <input type="text" id="transactionNominal" class="w-full bg-brand-soft border-none rounded-2xl p-3 text-lg font-bold text-brand-primary" placeholder="0" required>
+        </div>
+        
+        <div id="transferFeeGroup" class="hidden p-4 bg-rose-50/50 rounded-2xl space-y-3 border border-rose-100">
+          <label class="text-[10px] font-bold text-brand-primary uppercase">Biaya Admin</label>
+          <input type="text" id="transferFee" class="w-full bg-white border-none rounded-xl p-2 text-sm font-bold" value="0">
+          <div class="flex gap-4">
+            <label class="text-[10px] font-bold uppercase text-brand-dark/60 flex items-center cursor-pointer">
+              <input type="radio" name="feePayer" value="sender" checked class="mr-2 accent-brand-primary"> Pengirim
+            </label>
+            <label class="text-[10px] font-bold uppercase text-brand-dark/60 flex items-center cursor-pointer">
+              <input type="radio" name="feePayer" value="receiver" class="mr-2 accent-brand-primary"> Penerima
+            </label>
+          </div>
+        </div>
+
+        <div class="flex gap-3 pt-4">
+          <button type="button" id="cancelTransactionBtn" class="flex-1 py-3 font-bold text-slate-400">Batal</button>
+          <button type="submit" class="flex-1 py-3 bg-brand-dark text-white rounded-2xl font-bold">Simpan</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="toastContainer" class="fixed bottom-8 right-8 z-[100] flex flex-col gap-2"></div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  // --- KONFIGURASI REKENING (Cuma 3 Sesuai Request) ---
+  const rekeningKeys = [
+    { key: 'transaksi_rekening_Cash', label: 'Cash' },
+    { key: 'transaksi_rekening_Bank_BRI', label: 'Bank BRI' },
+    { key: 'transaksi_rekening_Bank_BSI', label: 'Bank BSI' }
+  ];
+
+  const defaultAccountCategories = ['Makanan & Minuman', 'Transportasi', 'Belanja', 'Pendidikan', 'Hiburan', 'Tagihan', 'Gaji', 'Investasi', 'Kesehatan', 'Lain-lain'];
+  
+  let customAccountClassifications = JSON.parse(localStorage.getItem('customAccountClassifications')) || [];
+  let monthlyBudgets = JSON.parse(localStorage.getItem('monthlyBudgets')) || {};
+  let areNominalsVisible = false;
+  let balanceChartInstance = null;
+
+  const tahunEl = document.getElementById('tahun');
+  const bulanEl = document.getElementById('bulan');
+  const startYear = 2025;
+  const endYear = 2035;
+  for (let y = startYear; y <= endYear; y++) tahunEl.innerHTML += `<option value="${y}">${y}</option>`;
+  const monthsArr = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+  monthsArr.forEach((m, i) => bulanEl.innerHTML += `<option value="${String(i+1).padStart(2,'0')}">${m}</option>`);
+  
+  const currentActualYear = new Date().getFullYear();
+  tahunEl.value = (currentActualYear >= 2025 && currentActualYear <= 2035) ? currentActualYear : 2025;
+  bulanEl.value = String(new Date().getMonth() + 1).padStart(2, '0');
+
+  const formatRupiah = (n) => `Rp ${Math.abs(n).toLocaleString('id-ID')}`;
+  const getDisplayRupiah = (n) => areNominalsVisible ? (n < 0 ? '-' : '') + formatRupiah(n) : 'Rp ••••••••';
+  const parseRupiah = (s) => parseInt(String(s).replace(/\D/g, ''), 10) || 0;
+
+  function setupAutoFormat(elementId) {
+    const el = document.getElementById(elementId);
+    if (!el) return;
+    el.oninput = (e) => {
+        let v = e.target.value.replace(/\D/g, '');
+        e.target.value = v ? parseInt(v).toLocaleString('id-ID') : '';
+    };
+  }
+  setupAutoFormat('transactionNominal');
+  setupAutoFormat('transferFee');
+
+  function getSaldoSebelumBulan(label, year, month) {
+    const key = `transaksi_rekening_${label.replace(/\s/g, '_')}`;
+    const data = JSON.parse(localStorage.getItem(key)) || [];
+    const currentMonthStartDate = new Date(year, parseInt(month) - 1, 1);
+    let saldo = 0;
+    data.forEach(t => { if (new Date(t.tgl) < currentMonthStartDate) saldo += (t.jenis === 'pemasukan' ? t.nominal : -t.nominal); });
+    return saldo;
+  }
+
+  function getCustomCategoryForAccount(accountName) {
+    for (const classification of customAccountClassifications) {
+      if (classification.accounts.some(keyword => accountName.toLowerCase().includes(keyword.toLowerCase()))) return classification.categoryName;
+    }
+    return null;
+  }
+
+  function renderDashboard() {
+    const bulan = bulanEl.value;
+    const tahun = tahunEl.value;
+    const jumlah = +document.getElementById('jumlahTransaksi').value;
+    const searchNama = document.getElementById('searchNama').value.toLowerCase();
+    const filterKategori = document.getElementById('filterKategori').value;
+    const sDate = document.getElementById('startDate').value;
+    const eDate = document.getElementById('endDate').value;
+
+    let totalSaldoGlobal = 0;
+    let allTransaksi = [];
+    const rekeningList = document.getElementById('rekeningList');
+    rekeningList.innerHTML = '';
+
+    rekeningKeys.forEach(({ key, label }) => {
+      const data = JSON.parse(localStorage.getItem(key)) || [];
+      let saldoAkhir = getSaldoSebelumBulan(label, tahun, bulan);
+      const currentMonthData = data.filter(t => t.tgl.startsWith(`${tahun}-${bulan}`));
+      currentMonthData.forEach(t => saldoAkhir += (t.jenis === 'pemasukan' ? t.nominal : -t.nominal));
+
+      totalSaldoGlobal += saldoAkhir;
+      allTransaksi.push(...currentMonthData.map(t => ({ ...t, rekening: label, inferredKategori: getCustomCategoryForAccount(t.akun) || t.kategori || '-' })));
+
+      // PERBAIKAN: Menambahkan fungsi navigasi window.location.href pada elemen kartu
+      rekeningList.innerHTML += `
+        <div class="bg-white rounded-3xl p-5 shadow-sm card-zoom" 
+             onclick="window.location.href='rekening-${label.toLowerCase().replace(/\s+/g, '-')}.html'"
+             data-label="${label}">
+          <h3 class="font-bold text-rose-300 text-[10px] uppercase mb-2 tracking-widest">${label}</h3>
+          <p class="text-xl font-heading font-bold text-brand-dark">${getDisplayRupiah(saldoAkhir)}</p>
+        </div>
+      `;
+    });
+
+    document.getElementById('displayTotalKekayaan').textContent = getDisplayRupiah(totalSaldoGlobal);
+
+    let filtered = allTransaksi.filter(t => {
+      const matchNama = t.akun.toLowerCase().includes(searchNama);
+      const matchCat = !filterKategori || t.inferredKategori === filterKategori;
+      const matchS = !sDate || t.tgl >= sDate;
+      const matchE = !eDate || t.tgl <= eDate;
+      return matchNama && matchCat && matchS && matchE;
+    }).sort((a,b) => new Date(b.tgl) - new Date(a.tgl));
+
+    const tableBody = document.getElementById('transaksiTerakhir');
+    tableBody.innerHTML = filtered.slice(0, jumlah).map(t => `
+      <tr class="hover:bg-rose-50/30 transition-colors">
+        <td class="px-2 py-4 text-rose-300 text-[10px]">${t.tgl}</td>
+        <td class="px-2 py-4">
+          <div class="text-brand-dark text-sm">${t.akun}</div>
+          <div class="text-[9px] text-rose-300 uppercase font-bold">${t.rekening}</div>
+        </td>
+        <td class="px-2 py-4"><span class="bg-rose-50 text-brand-primary px-2 py-1 rounded text-[10px] font-bold">${t.inferredKategori}</span></td>
+        <td class="px-2 py-4 text-right font-bold ${t.jenis === 'pemasukan' ? 'text-brand-accent' : 'text-rose-400'}">
+          ${t.jenis === 'pemasukan' ? '+' : '-'}${getDisplayRupiah(t.nominal).replace('Rp ','')}
+        </td>
+      </tr>
+    `).join('');
+    document.getElementById('noTransactionsMessage').classList.toggle('hidden', filtered.length > 0);
+
+    renderCustomCategorySummary(bulan, tahun);
+    renderBudgetSummary(bulan, tahun);
+    renderBalanceChart();
+  }
+
+  function renderBalanceChart() {
+    const selectedYear = tahunEl.value;
+    const monthsLabels = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"];
+    const chartData = [];
+    
+    let runningTotal = 0;
+    rekeningKeys.forEach(({ key }) => {
+        const data = JSON.parse(localStorage.getItem(key)) || [];
+        data.filter(t => new Date(t.tgl).getFullYear() < selectedYear).forEach(t => {
+            runningTotal += (t.jenis === 'pemasukan' ? t.nominal : -t.nominal);
+        });
+    });
+
+    for (let i = 0; i < 12; i++) {
+        const mStr = String(i + 1).padStart(2, '0');
+        rekeningKeys.forEach(({ key }) => {
+            const data = JSON.parse(localStorage.getItem(key)) || [];
+            data.filter(t => t.tgl.startsWith(`${selectedYear}-${mStr}`)).forEach(t => {
+                runningTotal += (t.jenis === 'pemasukan' ? t.nominal : -t.nominal);
+            });
+        });
+        chartData.push(runningTotal);
+    }
+
+    const ctx = document.getElementById('balanceChart').getContext('2d');
+    if(balanceChartInstance) balanceChartInstance.destroy();
+    balanceChartInstance = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: monthsLabels,
+            datasets: [{
+                label: 'Kekayaan',
+                data: chartData,
+                borderColor: '#db2777',
+                backgroundColor: 'rgba(219, 39, 119, 0.05)',
+                fill: true,
+                tension: 0.4,
+                pointRadius: 3,
+                pointBackgroundColor: '#db2777'
+            }]
+        },
+        options: { 
+            responsive: true, maintainAspectRatio: false,
+            scales: { 
+                y: { ticks: { callback: v => v.toLocaleString('id-ID'), color: '#33272a' }, grid: { color: '#fff1f2' } },
+                x: { grid: { display: false }, ticks: { color: '#33272a' } }
+            },
+            plugins: { legend: { display: false } }
+        }
+    });
+  }
+
+  function renderCustomCategorySummary(m, y) {
+    const el = document.getElementById('ringkasanKategoriKustom');
+    el.innerHTML = '';
+    if (customAccountClassifications.length === 0) {
+      el.innerHTML = '<p class="text-rose-300 text-xs text-center">Belum ada kategori kustom.</p>';
+      return;
+    }
+    customAccountClassifications.forEach(c => {
+      let total = 0;
+      rekeningKeys.forEach(({key}) => {
+        const data = JSON.parse(localStorage.getItem(key)) || [];
+        data.filter(t => t.tgl.startsWith(`${y}-${m}`) && c.accounts.some(kw => t.akun.toLowerCase().includes(kw.toLowerCase())))
+            .forEach(t => total += t.nominal);
+      });
+      el.innerHTML += `
+        <div class="flex justify-between items-center p-3 bg-brand-soft/50 rounded-2xl border border-rose-100/50">
+          <span class="text-sm font-bold text-brand-dark">${c.categoryName}</span>
+          <span class="text-sm font-heading font-bold text-brand-primary">${getDisplayRupiah(total)}</span>
+        </div>
+      `;
+    });
+  }
+
+  function renderBudgetSummary(m, y) {
+    const el = document.getElementById('anggaranSummary');
+    el.innerHTML = '';
+    const budgets = monthlyBudgets[`${y}-${m}`] || [];
+    if (!budgets.length) {
+      el.innerHTML = '<p class="text-rose-300 text-xs text-center">Klik kelola untuk buat anggaran.</p>';
+      return;
+    }
+
+    const spending = {};
+    rekeningKeys.forEach(({key}) => {
+      const data = JSON.parse(localStorage.getItem(key)) || [];
+      data.filter(t => t.tgl.startsWith(`${y}-${m}`) && t.jenis === 'pengeluaran').forEach(t => {
+        const cat = getCustomCategoryForAccount(t.akun) || t.kategori || 'Lain-lain';
+        spending[cat] = (spending[cat] || 0) + t.nominal;
+      });
+    });
+
+    budgets.forEach(b => {
+      const actual = spending[b.category] || 0;
+      const perc = Math.min(100, (actual / b.amount) * 100);
+      const color = perc > 90 ? 'bg-rose-400' : 'bg-brand-primary';
+      el.innerHTML += `
+        <div>
+          <div class="flex justify-between text-[10px] font-bold mb-2 uppercase tracking-wide">
+            <span class="text-brand-dark">${b.category}</span>
+            <span class="${perc > 100 ? 'text-rose-500' : 'text-rose-300'}">${getDisplayRupiah(actual)} / ${formatRupiah(b.amount)}</span>
+          </div>
+          <div class="w-full bg-rose-50 h-1.5 rounded-full overflow-hidden">
+            <div class="${color} h-full transition-all duration-700" style="width: ${perc}%"></div>
+          </div>
+        </div>
+      `;
+    });
+  }
+
+  const backdrop = document.getElementById('modalBackdrop');
+  const openModal = (id) => { backdrop.classList.remove('hidden'); document.getElementById(id).classList.remove('hidden'); };
+  const closeModal = () => { backdrop.classList.add('hidden'); document.querySelectorAll('#modalBackdrop > div').forEach(d => d.classList.add('hidden')); };
+
+  document.getElementById('aturKategoriBtn').onclick = () => {
+    const cont = document.getElementById('kategoriInputContainer');
+    cont.innerHTML = '';
+    customAccountClassifications.forEach(c => addKategoriRow(c.categoryName, c.accounts.join(',')));
+    if(!customAccountClassifications.length) addKategoriRow();
+    openModal('modalAturKategori');
+  };
+
+  function addKategoriRow(n='', a='') {
+    const div = document.createElement('div');
+    div.className = 'bg-brand-soft/40 p-4 rounded-2xl mb-3 border border-rose-100 kat-row';
+    div.innerHTML = `
+      <input type="text" placeholder="Nama Kategori" class="w-full bg-white rounded-xl p-2 mb-2 text-sm kat-name border-none">
+      <input type="text" placeholder="Keyword (pisahkan koma)" class="w-full bg-white rounded-xl p-2 text-sm kat-acc border-none" value="${a}">
+      <button class="text-rose-300 text-[10px] mt-2 font-bold hover:text-brand-primary uppercase" onclick="this.parentElement.remove()">Hapus</button>
+    `;
+    div.querySelector('.kat-name').value = n;
+    document.getElementById('kategoriInputContainer').appendChild(div);
+  }
+
+  document.getElementById('tambahKategoriBtn').onclick = () => addKategoriRow();
+  document.getElementById('simpanKategoriBtn').onclick = () => {
+    const rows = [];
+    document.querySelectorAll('.kat-row').forEach(r => {
+      const name = r.querySelector('.kat-name').value.trim();
+      const accs = r.querySelector('.kat-acc').value.split(',').map(v => v.trim()).filter(v => v);
+      if(name && accs.length) rows.push({ categoryName: name, accounts: accs });
+    });
+    customAccountClassifications = rows;
+    localStorage.setItem('customAccountClassifications', JSON.stringify(rows));
+    closeModal(); renderDashboard(); populateFilterCategories();
+    showToast("Kategori disimpan");
+  };
+
+  document.getElementById('aturAnggaranBtn').onclick = () => {
+    const cont = document.getElementById('anggaranInputContainer');
+    cont.innerHTML = '';
+    const current = monthlyBudgets[`${tahunEl.value}-${bulanEl.value}`] || [];
+    current.forEach(b => addAnggaranRow(b.category, b.amount));
+    if(!current.length) addAnggaranRow();
+    openModal('modalAturAnggaran');
+  };
+
+  function addAnggaranRow(c='', a='') {
+    const div = document.createElement('div');
+    div.className = 'bg-brand-soft/40 p-4 rounded-2xl mb-3 border border-rose-100 ang-row animate-fade-in';
+    const cats = [...defaultAccountCategories, ...customAccountClassifications.map(v => v.categoryName)];
+    div.innerHTML = `
+      <div class="flex flex-col gap-2">
+        <select class="w-full bg-white rounded-xl p-2 text-sm ang-cat border-none">
+          <option value="" disabled ${c === '' ? 'selected' : ''}>Pilih Kategori</option>
+          ${cats.map(v => `<option value="${v}" ${v===c?'selected':''}>${v}</option>`).join('')}
+        </select>
+        <div class="relative">
+          <span class="absolute left-3 top-2 text-rose-300 text-sm">Rp</span>
+          <input type="text" placeholder="0" class="w-full bg-white rounded-xl p-2 pl-9 text-sm ang-amt border-none" 
+                 value="${a ? a.toLocaleString('id-ID') : ''}">
+        </div>
+        <button class="text-rose-300 text-[10px] font-bold hover:text-brand-primary self-end uppercase" 
+                onclick="this.closest('.ang-row').remove()">Hapus</button>
+      </div>
+    `;
+    div.querySelector('.ang-amt').oninput = (e) => {
+        let v = e.target.value.replace(/\D/g, '');
+        e.target.value = v ? parseInt(v).toLocaleString('id-ID') : '';
+    };
+    document.getElementById('anggaranInputContainer').appendChild(div);
+  }
+
+  document.getElementById('tambahAnggaranInputBtn').addEventListener('click', () => addAnggaranRow());
+
+  document.getElementById('simpanAnggaranBtn').onclick = () => {
+    const rows = [];
+    document.querySelectorAll('.ang-row').forEach(r => {
+      const cat = r.querySelector('.ang-cat').value;
+      const amt = parseRupiah(r.querySelector('.ang-amt').value);
+      if(cat && amt > 0) rows.push({ category: cat, amount: amt });
+    });
+    monthlyBudgets[`${tahunEl.value}-${bulanEl.value}`] = rows;
+    localStorage.setItem('monthlyBudgets', JSON.stringify(monthlyBudgets));
+    closeModal(); renderDashboard();
+    showToast("Anggaran disimpan");
+  };
+
+  document.getElementById('exportBackup').onclick = () => {
+    const allData = {};
+    Object.keys(localStorage).forEach(k => allData[k] = localStorage.getItem(k));
+    const blob = new Blob([JSON.stringify(allData, null, 2)], {type: "application/json"});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `backup_keuangan_${new Date().toISOString().slice(0,10)}.json`;
+    a.click();
+    showToast("Backup diekspor");
+  };
+
+  document.getElementById('importBackup').onchange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const data = JSON.parse(event.target.result);
+        localStorage.clear();
+        Object.keys(data).forEach(k => localStorage.setItem(k, data[k]));
+        showToast("Import Berhasil!");
+        setTimeout(() => location.reload(), 1000);
+      } catch (err) { showToast("File tidak valid!", "error"); }
+    };
+    reader.readAsText(file);
+  };
+
+  document.getElementById('downloadExcel').onclick = () => {
+    const bulan = bulanEl.value, tahun = tahunEl.value;
+    const dataToExport = [];
+    rekeningKeys.forEach(({ key, label }) => {
+      const data = JSON.parse(localStorage.getItem(key)) || [];
+      data.filter(t => t.tgl.startsWith(`${tahun}-${bulan}`)).forEach(t => {
+        dataToExport.push({ Tanggal: t.tgl, Rekening: label, Item: t.akun, Kategori: t.kategori, Nominal: t.nominal, Jenis: t.jenis });
+      });
+    });
+    if(!dataToExport.length) return showToast("Tidak ada data", "error");
+    const ws = XLSX.utils.json_to_sheet(dataToExport);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Transaksi");
+    XLSX.writeFile(wb, `Laporan_${monthsArr[parseInt(bulan)-1]}_${tahun}.xlsx`);
+  };
+
+  document.getElementById('downloadPDF').onclick = function() {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF('p', 'mm', 'a4');
+    const bulan = bulanEl.value, tahun = tahunEl.value;
+    const namaBulan = monthsArr[parseInt(bulan) - 1];
+
+    let gabunganData = [], totalPemasukan = 0, totalPengeluaran = 0;
+    rekeningKeys.forEach(({ key, label }) => {
+        const data = JSON.parse(localStorage.getItem(key)) || [];
+        data.filter(t => t.tgl.startsWith(`${tahun}-${bulan}`)).forEach(t => {
+            gabunganData.push({ tgl: t.tgl, rek: label, akun: t.akun, kat: getCustomCategoryForAccount(t.akun) || t.kategori || '-', nom: t.nominal, jenis: t.jenis });
+            if(t.jenis === 'pemasukan') totalPemasukan += t.nominal; else totalPengeluaran += t.nominal;
+        });
+    });
+    gabunganData.sort((a, b) => new Date(a.tgl) - new Date(b.tgl));
+
+    doc.setFillColor(51, 39, 42); doc.rect(0, 0, 210, 40, 'F');
+    doc.setTextColor(255, 255, 255); doc.setFontSize(22); doc.text("LAPORAN KEUANGAN", 14, 20);
+    doc.setFontSize(10); doc.text(`${namaBulan.toUpperCase()} ${tahun}`, 14, 28);
+
+    doc.setFillColor(255, 241, 242); doc.roundedRect(14, 45, 182, 25, 3, 3, 'F');
+    doc.setTextColor(51, 39, 42); doc.text("PEMASUKAN", 20, 53); doc.text("PENGELUARAN", 80, 53); doc.text("SALDO BERSIH", 140, 53);
+    doc.setTextColor(5, 150, 105); doc.text(`Rp ${totalPemasukan.toLocaleString('id-ID')}`, 20, 62);
+    doc.setTextColor(219, 39, 119); doc.text(`Rp ${totalPengeluaran.toLocaleString('id-ID')}`, 80, 62);
+    doc.setTextColor(51, 39, 42); doc.text(`Rp ${(totalPemasukan - totalPengeluaran).toLocaleString('id-ID')}`, 140, 62);
+
+    const tableRows = gabunganData.map(t => [t.tgl, t.akun + ' (' + t.rek + ')', t.kat, (t.jenis === 'pemasukan' ? '+' : '-') + ' Rp ' + t.nom.toLocaleString('id-ID')]);
+    doc.autoTable({ startY: 75, head: [['TANGGAL', 'DETAIL', 'KATEGORI', 'NOMINAL']], body: tableRows, headStyles: { fillColor: [219, 39, 119] } });
+    doc.save(`Laporan_${namaBulan}_${tahun}.pdf`);
+  };
+
+  document.getElementById('downloadLaporanBulanan').onclick = () => document.getElementById('downloadPDF').click();
+
+  document.getElementById('addTransactionBtn').onclick = () => {
+    const f = document.getElementById('rekeningFrom'), t = document.getElementById('rekeningTo');
+    f.innerHTML = t.innerHTML = rekeningKeys.map(r => `<option value="${r.label}">${r.label}</option>`).join('');
+    document.getElementById('transactionCategory').innerHTML = defaultAccountCategories.map(c => `<option value="${c}">${c}</option>`).join('');
+    document.getElementById('transactionDate').valueAsDate = new Date();
+    document.getElementById('transactionForm').reset();
+    openModal('modalAddTransaction');
+  };
+
+  document.getElementById('transactionType').onchange = (e) => {
+    const isT = e.target.value === 'transfer';
+    document.getElementById('rekeningToGroup').classList.toggle('hidden', !isT);
+    document.getElementById('transferFeeGroup').classList.toggle('hidden', !isT);
+    document.getElementById('categoryGroup').classList.toggle('hidden', isT);
+  };
+
+  document.getElementById('transactionForm').onsubmit = (e) => {
+    e.preventDefault();
+    const type = document.getElementById('transactionType').value;
+    const date = document.getElementById('transactionDate').value;
+    const nominal = parseRupiah(document.getElementById('transactionNominal').value);
+    
+    if(type === 'transfer') {
+      const from = document.getElementById('rekeningFrom').value, to = document.getElementById('rekeningTo').value;
+      const fee = parseRupiah(document.getElementById('transferFee').value);
+      const feePayer = document.querySelector('input[name="feePayer"]:checked').value;
+      if(from === to) return showToast("Rekening sama!", "error");
+      
+      const keyF = `transaksi_rekening_${from.replace(/\s/g, '_')}`, keyT = `transaksi_rekening_${to.replace(/\s/g, '_')}`;
+      const dataF = JSON.parse(localStorage.getItem(keyF)) || [], dataT = JSON.parse(localStorage.getItem(keyT)) || [];
+      
+      let fAmtF = nominal, fAmtT = nominal;
+      if(feePayer === 'sender') fAmtF = nominal + fee; else fAmtT = nominal - fee;
+      
+      dataF.push({ tgl: date, akun: `Transfer ke ${to}`, kategori: 'Transfer', nominal: fAmtF, jenis: 'pengeluaran' });
+      dataT.push({ tgl: date, akun: `Transfer dari ${from}`, kategori: 'Transfer', nominal: fAmtT, jenis: 'pemasukan' });
+      localStorage.setItem(keyF, JSON.stringify(dataF)); localStorage.setItem(keyT, JSON.stringify(dataT));
+    } else {
+      const rek = document.getElementById('rekeningFrom').value;
+      const key = `transaksi_rekening_${rek.replace(/\s/g, '_')}`;
+      const data = JSON.parse(localStorage.getItem(key)) || [];
+      data.push({ tgl: date, akun: document.getElementById('transactionAccount').value, kategori: document.getElementById('transactionCategory').value, nominal: nominal, jenis: type });
+      localStorage.setItem(key, JSON.stringify(data));
+    }
+    closeModal(); renderDashboard(); showToast("Berhasil disimpan");
+  };
+
+  document.getElementById('resetData').onclick = () => { if(confirm("Hapus semua data?")) { localStorage.clear(); location.reload(); } };
+  document.querySelector('.toggle-visibility-btn').onclick = () => {
+    areNominalsVisible = !areNominalsVisible;
+    document.getElementById('eyeIcon').className = areNominalsVisible ? 'fas fa-eye text-xs' : 'fas fa-eye-slash text-xs';
+    renderDashboard();
+  };
+
+  document.getElementById('tutupModalBtn').onclick = closeModal;
+  document.getElementById('tutupModalAnggaranBtn').onclick = closeModal;
+  document.getElementById('cancelTransactionBtn').onclick = closeModal;
+
+  function populateFilterCategories() {
+    const sel = document.getElementById('filterKategori');
+    sel.innerHTML = '<option value="">Semua Kategori</option>';
+    [...defaultAccountCategories, ...customAccountClassifications.map(v => v.categoryName)].forEach(c => sel.innerHTML += `<option value="${c}">${c}</option>`);
+  }
+
+  ['bulan','tahun','jumlahTransaksi','filterKategori','startDate','endDate'].forEach(id => document.getElementById(id).addEventListener('change', renderDashboard));
+  document.getElementById('searchNama').addEventListener('input', renderDashboard);
+
+  populateFilterCategories(); renderDashboard();
+});
+
+function showToast(m, type = 'success') {
+  const t = document.getElementById('toastContainer');
+  const d = document.createElement('div');
+  d.className = `px-6 py-3 rounded-2xl shadow-xl animate-fade-in ${type === 'error' ? 'bg-rose-500' : 'bg-brand-dark'} text-white text-xs font-bold`;
+  d.textContent = m;
+  t.appendChild(d);
+  setTimeout(() => { d.style.opacity = '0'; setTimeout(() => d.remove(), 500); }, 3000);
+}
+</script>
+</body>
+</html>
